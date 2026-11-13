@@ -35,6 +35,7 @@ class Users(Base):
     user_id = Column(Integer , primary_key=True)
     user_name = Column(String)
     password = Column(String)
+    role = Column(String, default="staff")
 
 
 Base.metadata.create_all(engine)
@@ -308,21 +309,24 @@ def verify_login(username,password):
     except VerifyMismatchError:
         session.close()
         return False
+    role = query.role or "staff"
     session.close()
-    access_token = create_token(username=username, tokentype = "access")
-    refresh_token = create_token(username=username , tokentype="refresh")
-    return {"access_token":access_token,"refresh_token":refresh_token}
+    access_token = create_token(username=username, role=role, tokentype = "access")
+    refresh_token = create_token(username=username, role=role, tokentype="refresh")
+    return {"access_token":access_token,"refresh_token":refresh_token, "role": role}
  
-def create_token(username:str,tokentype:str):
+def create_token(username:str, role:str = "staff", tokentype:str = "access"):
     if tokentype == "access":
         payload={
             "username":username,
+            "role": role,
             "tokentype":tokentype,
             "exp" :datetime.now(timezone.utc) + timedelta(minutes=ACESSS_TOKEN_EXPIRY)
         }
     elif tokentype == "refresh":
         payload={
             "username":username,
+            "role": role,
             "tokentype":tokentype,
             "exp" :datetime.now(timezone.utc) + timedelta(minutes=REFRESH_TOKEN_EXPIRY)
         }
@@ -337,16 +341,19 @@ def verify_token(token,tokentype="access"):
         return False
 
     if payload["tokentype"] == tokentype:
-        return payload["username"]
+        return {
+            "username": payload["username"],
+            "role": payload.get("role", "staff")
+        }
     return False
 
-def register_user(user_name:str,password:str):
+def register_user(user_name:str,password:str, role:str = "staff"):
     session = Session(engine)
     user_exits=session.query(Users).filter_by(user_name=user_name).first()
     if user_exits is not None:
         session.close()
         return False
-    session.add(Users(user_name=user_name,password=ph.hash(password)))
+    session.add(Users(user_name=user_name,password=ph.hash(password), role=role))
     session.commit()
     session.close()
     return True
