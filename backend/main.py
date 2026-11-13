@@ -18,7 +18,7 @@ app.add_middleware(
 VALID_STATUSES = ["pending", "received", "dispatched"]
 VALID_BATCH_STATUSES = ["pending", "dispatched"]
  
-@app.post("/packages")
+@app.post("/packages", status_code=201)
 def register_package(package_name: str, destination: str, weight: float, arrival_date: date, status: str):
     if status not in VALID_STATUSES:
         raise HTTPException(status_code=422, detail="Invalid status.")
