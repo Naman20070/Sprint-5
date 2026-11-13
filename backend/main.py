@@ -11,13 +11,14 @@ app = FastAPI(
  
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://127.0.0.1:5173"],
     allow_methods=["*"],
     allow_headers=["*"]
 )
  
 VALID_STATUSES = ["pending", "received", "dispatched"]
 VALID_BATCH_STATUSES = ["pending", "dispatched"]
+VALID_ROLES = ["staff", "admin"]
 
 
 
@@ -42,8 +43,8 @@ class BatchCreate(BaseModel):
     package_ids: list[int] = []
 
 class UserAuth(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=1)
+    password: str = Field(min_length=1)
     role: str = "staff"
 
 
@@ -169,6 +170,8 @@ def refresh(refresh_token):
 
 @app.post("/register")
 def register(data: UserAuth):
+    if data.role not in VALID_ROLES:
+        raise HTTPException(status_code=422, detail="Invalid role.")
     if functions.register_user(user_name=data.username, password=data.password, role=data.role):
         return {"message": "user registered successfully"}
     raise HTTPException(status_code=400, detail="User already exists")
