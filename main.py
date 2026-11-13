@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, Query
+from fastapi import FastAPI, HTTPException, Header, Body
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import date
 import functions
@@ -94,9 +94,9 @@ def get_warehouse_stats(token = Header(None)):
 
 
 @app.post("/login")
-def login(username:str,passward: str):
-    token = functions.verify_login(username=username,passward=passward)
-    if token is None:
+def login(username = Body(),password = Body()):
+    token = functions.verify_login(username=username,password=password)
+    if not token:
         raise HTTPException(status_code=401,detail="Invalid Credentials")
     return token
 
@@ -107,3 +107,9 @@ def refresh(refresh_token):
         raise HTTPException(status_code=401,detail="Invalid Token")
     access_token = functions.create_token(username=username , tokentype="access")
     return {"access_token":access_token}
+
+@app.post("/register")
+def register(username = Body(),password = Body()):
+    if functions.register_user(user_name=username,password=password):
+        return {"message":"user registered successfully"}
+    raise HTTPException(status_code=400 , detail= "User already exists")

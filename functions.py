@@ -4,9 +4,13 @@ from sqlalchemy.orm import Session, declarative_base
 import jwt
 from datetime import datetime , timedelta , timezone
 
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
+
 engine = create_engine("sqlite:///warehouse.db")
 Base = declarative_base()
 
+ph=PasswordHasher()
 
 class DispatchBatch(Base):
     __tablename__ = "dispatch_batches"
@@ -25,6 +29,12 @@ class Package(Base):
     arrival_date = Column(Date)
     status = Column(String)
     batch_id = Column(Integer, ForeignKey("dispatch_batches.id"), nullable=True)
+
+class Users(Base):
+    __tablename__ = "users"
+    user_id = Column(Integer , primary_key=True)
+    user_name = Column(String)
+    password = Column(String)
 
 
 Base.metadata.create_all(engine)
@@ -287,13 +297,22 @@ SECRET_KEY = "123SECRET"
 ALGORITHM = "HS256"
 
 
-def verify_login(username,passward):
-    if username==USERNAME and passward==PASSWORD:
-        access_token = create_token(username=username, tokentype = "access")
-        refresh_token = create_token(username=username , tokentype="refresh")
-        return {"access_token":access_token,"refresh_token":refresh_token}
-    return None
-
+def verify_login(username,password):
+    session=Session(engine)
+    query = session.query(Users).filter(Users.user_name == username).first()
+    if query is None:
+        session.close()
+        return False
+    try:
+        ph.verify(query.password,password)
+    except VerifyMismatchError:
+        session.close()
+        return False
+    session.close()
+    access_token = create_token(username=username, tokentype = "access")
+    refresh_token = create_token(username=username , tokentype="refresh")
+    return {"access_token":access_token,"refresh_token":refresh_token}
+ 
 def create_token(username:str,tokentype:str):
     if tokentype == "access":
         payload={
@@ -320,3 +339,14 @@ def verify_token(token,tokentype="access"):
     if payload["tokentype"] == tokentype:
         return payload["username"]
     return False
+
+def register_user(user_name:str,password:str):
+    session = Session(engine)
+    user_exits=session.query(Users).filter_by(user_name=user_name).first()
+    if user_exits is not None:
+        session.close()
+        return False
+    session.add(Users(user_name=user_name,password=ph.hash(password)))
+    session.commit()
+    session.close()
+    return True
