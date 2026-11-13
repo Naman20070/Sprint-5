@@ -210,6 +210,74 @@ def search_batches(destination=None, vehicle=None, dispatch_status=None):
     return result
 
 
+def create_batch(destination, vehicle, dispatch_status="pending", package_ids=None):
+    session = Session(engine)
+
+    packages = []
+    if package_ids:
+        for pid in package_ids:
+            pkg = session.query(Package).filter(Package.id == pid).first()
+            if pkg is None:
+                session.close()
+                return None, pid
+            packages.append(pkg)
+
+    batch = DispatchBatch(
+        destination=destination,
+        vehicle=vehicle,
+        dispatch_status=dispatch_status
+    )
+    session.add(batch)
+    session.commit()
+
+    assigned_ids = []
+    for pkg in packages:
+        pkg.batch_id = batch.id
+        if dispatch_status == "dispatched":
+            pkg.status = "dispatched"
+        assigned_ids.append(pkg.id)
+
+    session.commit()
+
+    result = {
+        "id": batch.id,
+        "destination": batch.destination,
+        "vehicle": batch.vehicle,
+        "dispatch_status": batch.dispatch_status,
+        "package_ids": assigned_ids
+    }
+
+    session.close()
+    return result, None
+
+
+def get_warehouse_stats():
+    session = Session(engine)
+
+    packages = session.query(Package).all()
+
+    total_received = len(packages)
+    total_dispatched = 0
+    total_pending = 0
+    destination_counts = {}
+
+    for pkg in packages:
+        if pkg.status == "dispatched":
+            total_dispatched += 1
+        else:
+            total_pending += 1
+
+        destination_counts[pkg.destination] = destination_counts.get(pkg.destination, 0) + 1
+
+    session.close()
+    return {
+        "total_packages_received": total_received,
+        "total_packages_pending": total_pending,
+        "total_packages_dispatched": total_dispatched,
+        "destination_wise_count": destination_counts
+    }
+
+
 USERNAME = "admin"
 PASSWORD = "admin123"
 
@@ -243,10 +311,10 @@ def create_token(username:str,tokentype:str):
     token = jwt.encode(payload=payload,key=SECRET_KEY,algorithm=ALGORITHM)
     return token
     
-def verify_token(token,tokentype):
+def verify_token(token,tokentype="access"):
     try:
         payload = jwt.decode(jwt=token,key=SECRET_KEY,algorithms=[ALGORITHM])
-    except:
+    except Exception:
         return False
 
     if payload["tokentype"] == tokentype:

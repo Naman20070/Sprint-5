@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException,Header
+from fastapi import FastAPI, HTTPException, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import date
 import functions
@@ -18,7 +18,7 @@ app.add_middleware(
 VALID_STATUSES = ["pending", "received", "dispatched"]
 VALID_BATCH_STATUSES = ["pending", "dispatched"]
  
-@app.post("/packages", status_code=201)
+@app.post("/packages")
 def register_package(package_name: str, destination: str, weight: float, arrival_date: date, status: str):
     if status not in VALID_STATUSES:
         raise HTTPException(status_code=422, detail="Invalid status.")
@@ -72,6 +72,25 @@ def search_batches(destination=None, vehicle=None, dispatch_status=None,token = 
     if dispatch_status and dispatch_status not in VALID_BATCH_STATUSES:
         raise HTTPException(status_code=422, detail="Invalid dispatch status.")
     return functions.search_batches(destination=destination, vehicle=vehicle, dispatch_status=dispatch_status)
+
+@app.post("/batches")
+def create_batch(package_ids,destination: str, vehicle: str, dispatch_status: str = "pending",token = Header(None)):
+    username = functions.verify_token(token=token)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid or Expired Token.")
+    if dispatch_status not in VALID_BATCH_STATUSES:
+        raise HTTPException(status_code=422, detail="Invalid dispatch status.")
+    result, missing_id = functions.create_batch(destination=destination, vehicle=vehicle, dispatch_status=dispatch_status, package_ids=package_ids)
+    if missing_id is not None:
+        raise HTTPException(status_code=404, detail=f"Package {missing_id} not found")
+    return result
+
+@app.get("/stats")
+def get_warehouse_stats(token = Header(None)):
+    username = functions.verify_token(token=token)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid or Expired Token.")
+    return functions.get_warehouse_stats()
 
 
 @app.post("/login")
